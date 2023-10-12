@@ -11,8 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.1.0
-  dio: ^5.1.1
-  chopper: ^7.0.6
+  dio: ^5.3.3
+  chopper: ^7.0.8
   overlay_support: ^2.1.0
   share_plus: ^7.1.0
-  rxdart: ^0.27.1
+  rxdart: ^0.27.7
