@@ -10,60 +10,25 @@ import 'package:rxdart/rxdart.dart';
 class AliceCore {
   /// Should user be notified with notification if there's new request catched
   /// by Alice
-  final bool showNotification;
-
-  /// Should inspector be opened on device shake (works only with physical
-  /// with sensors)
-  final bool showInspectorOnShake;
 
   /// Should inspector use dark theme
   final bool darkTheme;
 
   /// Rx subject which contains all intercepted http calls
-  final BehaviorSubject<List<AliceHttpCall>> callsSubject =
-      BehaviorSubject.seeded([]);
+  final BehaviorSubject<List<AliceHttpCall>> callsSubject = BehaviorSubject.seeded([]);
 
-  /// Icon url for notification
-  final String notificationIcon;
-
-  GlobalKey<NavigatorState>? _navigatorKey;
   Brightness _brightness = Brightness.light;
-  bool _isInspectorOpened = false;
   StreamSubscription? _callsSubscription;
-  String? _notificationMessage;
-  String? _notificationMessageShown;
-  bool _notificationProcessing = false;
 
   static AliceCore? _singleton;
 
-  factory AliceCore(
-    _navigatorKey,
-    showNotification,
-    showInspectorOnShake,
-    darkTheme,
-    notificationIcon,
-  ) {
-    _singleton ??= AliceCore._(
-      _navigatorKey,
-      showNotification,
-      showInspectorOnShake,
-      darkTheme,
-      notificationIcon,
-    );
+  factory AliceCore(darkTheme) {
+    _singleton ??= AliceCore._(darkTheme);
     return _singleton!;
   }
 
   /// Creates alice core instance
-  AliceCore._(
-    this._navigatorKey,
-    this.showNotification,
-    this.showInspectorOnShake,
-    this.darkTheme,
-    this.notificationIcon,
-  ) {
-    if (showNotification) {
-      _callsSubscription = callsSubject.listen((_) => _onCallsChanged());
-    }
+  AliceCore._(this.darkTheme) {
     _brightness = darkTheme ? Brightness.dark : Brightness.light;
   }
 
@@ -77,99 +42,23 @@ class AliceCore {
   /// Get currently used brightness
   Brightness get brightness => _brightness;
 
-  void _onCallsChanged() async {
-    if (callsSubject.value.length > 0) {
-      _notificationMessage = _getNotificationMessage();
-      if (_notificationMessage != _notificationMessageShown &&
-          !_notificationProcessing) {
-        await _showLocalNotification();
-        _onCallsChanged();
-      }
-    }
-  }
-
-  /// Set custom navigation key. This will help if there's route library.
-  void setNavigatorKey(GlobalKey<NavigatorState> navigatorKey) {
-    this._navigatorKey = navigatorKey;
-  }
-
   /// Opens Http calls inspector. This will navigate user to the new fullscreen
   /// page where all listened http calls can be viewed.
-  void navigateToCallListScreen() {
-    var context = getContext();
-    if (context == null) {
-      print(
-          "Cant start Alice HTTP Inspector. Please add NavigatorKey to your application");
-      return;
-    }
-    if (!_isInspectorOpened) {
-      _isInspectorOpened = true;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AliceCallsListScreen(this),
-        ),
-      ).then((onValue) => _isInspectorOpened = false);
-    }
+
+  BuildContext? context;
+
+  BuildContext? getContext() {
+    return context;
   }
 
-  /// Get context from navigator key. Used to open inspector route.
-  BuildContext? getContext() => _navigatorKey?.currentState?.overlay?.context;
-
-  String _getNotificationMessage() {
-    List<AliceHttpCall>? calls = callsSubject.value;
-    int successCalls = calls
-        .where((call) =>
-            call.response != null &&
-            (call.response?.status ?? 0) >= 200 &&
-            (call.response?.status ?? 0) < 300)
-        .toList()
-        .length;
-
-    int redirectCalls = calls
-        .where((call) =>
-            call.response != null &&
-            (call.response?.status ?? 0) >= 300 &&
-            (call.response?.status ?? 0) < 400)
-        .toList()
-        .length;
-
-    int errorCalls = calls
-        .where((call) =>
-            call.response != null &&
-            (call.response?.status ?? 0) >= 400 &&
-            (call.response?.status ?? 0) < 600)
-        .toList()
-        .length;
-
-    int loadingCalls = calls.where((call) => call.loading).toList().length;
-
-    StringBuffer notificationsMessage = StringBuffer();
-    if (loadingCalls > 0) {
-      notificationsMessage.write("Loading: $loadingCalls");
-      notificationsMessage.write(" | ");
-    }
-    if (successCalls > 0) {
-      notificationsMessage.write("Success: $successCalls");
-      notificationsMessage.write(" | ");
-    }
-    if (redirectCalls > 0) {
-      notificationsMessage.write("Redirect: $redirectCalls");
-      notificationsMessage.write(" | ");
-    }
-    if (errorCalls > 0) {
-      notificationsMessage.write("Error: $errorCalls");
-    }
-    return notificationsMessage.toString();
-  }
-
-  Future _showLocalNotification() async {
-    _notificationProcessing = true;
-    String? message = _notificationMessage;
-    showDebugAnimNotification();
-    _notificationMessageShown = message;
-    _notificationProcessing = false;
-    return;
+  void show(BuildContext context) {
+    this.context = context;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AliceCallsListScreen(this),
+      ),
+    );
   }
 
   /// Add alice http call to calls subject
@@ -200,8 +89,8 @@ class AliceCore {
     }
     selectedCall.loading = false;
     selectedCall.response = response;
-    selectedCall.duration = response.time.millisecondsSinceEpoch -
-        selectedCall.request!.time.millisecondsSinceEpoch;
+    selectedCall.duration =
+        response.time.millisecondsSinceEpoch - selectedCall.request!.time.millisecondsSinceEpoch;
 
     callsSubject.add([...callsSubject.value]);
   }
@@ -220,19 +109,6 @@ class AliceCore {
 
   AliceHttpCall? _selectCall(int requestId) =>
       callsSubject.value.firstWhereOrNull((call) => call.id == requestId);
-
-  bool isShowedBubble = false;
-
-  void showDebugAnimNotification() {
-    if (isShowedBubble) {
-      return;
-    }
-    var context = getContext();
-    if (context == null) {
-      return;
-    }
-    isShowedBubble = true;
-  }
 }
 
 extension IterableExtension<T> on Iterable<T> {
